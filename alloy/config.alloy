@@ -1,0 +1,188 @@
+otelcol.receiver.otlp "default" {
+	// configures the default grpc endpoint "0.0.0.0:4317"
+	grpc { }
+	// configures the default http/protobuf endpoint "0.0.0.0:4318"
+	http { }
+
+	output {
+		metrics = [otelcol.processor.resourcedetection.default.input]
+		logs    = [otelcol.processor.resourcedetection.default.input]
+		traces  = [otelcol.processor.resourcedetection.default.input]
+	}
+}
+
+otelcol.processor.resourcedetection "default" {
+	detectors = ["env", "system"] // add "gcp", "ec2", "ecs", "elastic_beanstalk", "eks", "lambda", "azure", "aks", "consul", "heroku"  if you want to use cloud resource detection
+
+	system {
+		hostname_sources = ["os"]
+	}
+
+	output {
+		metrics = [otelcol.processor.transform.add_resource_attributes_as_metric_attributes.input]
+		logs    = [otelcol.processor.batch.default.input]
+		//logs = [loki.process.luhn]
+		traces  = [
+			otelcol.processor.batch.default.input,
+			otelcol.connector.host_info.default.input,
+		]
+	}
+}
+
+otelcol.connector.host_info "default" {
+	host_identifiers = ["host.name"]
+
+	output {
+		metrics = [otelcol.processor.batch.default.input]
+	}
+}
+
+otelcol.processor.transform "add_resource_attributes_as_metric_attributes" {
+	error_mode = "ignore"
+
+	metric_statements {
+		context    = "datapoint"
+		statements = [
+			"set(attributes[\"deployment.environment\"], resource.attributes[\"deployment.environment\"])",
+			"set(attributes[\"service.version\"], resource.attributes[\"service.version\"])",
+		]
+	}
+
+	output {
+		metrics = [otelcol.processor.batch.default.input]
+	}
+}
+
+otelcol.processor.batch "default" {
+	output {
+		metrics = [otelcol.exporter.otlphttp.grafana_cloud.input]
+		logs    = [otelcol.exporter.otlphttp.grafana_cloud.input]
+		traces  = [otelcol.exporter.otlphttp.grafana_cloud.input]
+	}
+}
+
+otelcol.exporter.otlphttp "grafana_cloud" {
+	client {
+		endpoint = "https://otlp-gateway-prod-us-central-0.grafana.net/otlp"
+		auth     = otelcol.auth.basic.grafana_cloud.handler
+	}
+}
+
+otelcol.auth.basic "grafana_cloud" {
+
+	/*
+	username = env("GRAFANA_CLOUD_INSTANCE_ID")
+	password = env("GRAFANA_CLOUD_API_KEY")
+	*/
+
+	
+	username = "453067"
+	password = "glc_eyJvIjoiNzA1MzkxIiwibiI6InN0YWNrLTQ1MzA2Ny1pbnRlZ3JhdGlvbi1wb3Ytc2ltIiwiayI6IjYwQzg2RTI5TWRVTjRNQ1FiMGx5ZTR3NiIsIm0iOnsiciI6InVzIn19"
+	
+}  
+
+
+prometheus.exporter.self "example" {}
+
+// Configure a prometheus.scrape component to collect Alloy metrics.
+prometheus.scrape "demo" {
+  targets    = prometheus.exporter.self.example.targets
+  forward_to = [prometheus.remote_write.demo.receiver]
+}
+
+prometheus.scrape "influx" {
+  // Collect metrics from the default listen address.
+  targets = [{
+    __address__ = "127.0.0.1:9273",
+  }]
+
+  forward_to = [prometheus.remote_write.demo.receiver]
+}
+
+
+prometheus.remote_write "demo" {
+  endpoint {
+    url = "https://prometheus-prod-10-prod-us-central-0.grafana.net/api/prom/push"
+
+    basic_auth {
+      username = "606905"
+      password = "glc_eyJvIjoiNzA1MzkxIiwibiI6InN0YWNrLTQ1MzA2Ny1obS13cml0ZS1zZWxmIiwiayI6Ik40MjBoblVNMk42dFo2ODdETjREWE4wQSIsIm0iOnsiciI6InVzIn19"
+    }
+  }
+}
+/*
+loki.process "luhn" {
+	forward_to = [otelcol.processor.batch.default.input]
+
+	stage.luhn{}
+
+	stage.replace{
+		expression = "password (\\S+)"
+		replace = "{{ .Value | Sha2Hash }}"
+	}
+	
+} */
+
+//Pyroscope
+/*
+discovery.docker "local_containers" {
+ host = "unix:///var/run/docker.sock"
+}
+*/
+
+/*
+discovery.relabel "pyroscope" {
+    //targets = discovery.docker.all.targets
+	targets = discovery.docker.local_containers.targets
+    // Filter needed containers based on docker labels
+    // See more info at reference doc https://grafana.com/docs/agent/next/flow/reference/components/discovery.docker/
+    rule {
+        source_labels = ["__meta_docker_container_name"]
+        regex = ".*pyroscope.*"
+        action = "keep"
+    }
+    // provide arbitrary service_name label, otherwise it will default to value of __meta_docker_container_name
+    rule {
+        source_labels = ["__meta_docker_container_name"]
+        regex = ".*pyroscope.*"
+        action = "replace"
+        target_label = "service_name"
+        replacement = "ebpf/docker/pyroscope"
+    }
+}
+
+
+pyroscope.ebpf "instance" {
+  forward_to = [pyroscope.write.endpoint.receiver]
+  targets = discovery.relabel.pyroscope.output
+}
+*/
+/*
+pyroscope.ebpf "instance" {
+ forward_to     = [pyroscope.write.endpoint.receiver]
+ targets = discovery.docker.local_containers.targets
+}
+
+
+pyroscope.write "endpoint" {
+ endpoint {
+  basic_auth {
+   password = "glc_eyJvIjoiNzA1MzkxIiwibiI6InN0YWNrLTQ1MzA2Ny1ocC13cml0ZS1mbGlnaHQtc2ltLXByb2ZpbGVzIiwiayI6IkxQUTEzU2MzSDRQU3l2MThUZTE4RjZZNiIsIm0iOnsiciI6InVzIn19"
+   username = "453067"
+  }
+  url = "https://profiles-prod-003.grafana.net"
+ }
+ external_labels = {
+  "env"      = "testing",
+  "instance" = env("HOSTNAME"),
+ }
+}
+*/
+
+//luhn https://grafana.com/docs/alloy/latest/reference/components/loki/loki.process/
+
+
+
+//hash https://grafana.com/docs/alloy/latest/reference/components/loki/loki.process/
+
+//statsd https://grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.exporter.statsd/

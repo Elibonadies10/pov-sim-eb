@@ -1,0 +1,67 @@
+version: '1'
+services:
+  flight-app-js:
+    environment:
+      #- OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318
+      - OTEL_SERVICE_NAME=flight-app-js
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_METRICS_EXPORTER=otlp
+      - OTEL_LOGS_EXPORTER=otlp
+      - OTEL_RESOURCE_ATTRIBUTES=service.namespace=prod
+      - OTEL_NODE_DISABLED_INSTRUMENTATIONS=fs
+    build:
+      context: ./flight-app-js
+    ports:
+      - "3000:3000"
+
+  flight-app-py:
+    environment:
+      #- OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4317
+      - OTEL_SERVICE_NAME=flight-app-py
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_METRICS_EXPORTER=otlp
+      - OTEL_LOGS_EXPORTER=otlp
+      - OTEL_RESOURCE_ATTRIBUTES=service.namespace=prod
+      - OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION=true
+    build:
+      context: ./flight-app-py
+    ports:
+      - "5000:5000"
+
+  alloy:
+    image: grafana/alloy
+    environment:
+      - GRAFANA_CLOUD_INSTANCE_ID = ${GRAFANA_CLOUD_INSTANCE_ID}
+      - GRAFANA_CLOUD_API_KEY = ${GRAFANA_CLOUD_API_KEY}
+    command: ["run", "--server.http.listen-addr=0.0.0.0:12345", "--storage.path=/var/lib/alloy/data", "/etc/alloy/config.alloy"]
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - '12345:12345'
+    user: root
+    privileged: true
+    pid: host
+
+  telegraf:
+    image: docker.io/telegraf:latest
+    container_name: telegraf
+    environment:
+      - TELEGRAM_BOT_TOKEN=your-bot-token
+      - TELEGRAM_CHAT_ID=your-chat-id
+    volumes:
+      - ./telegraf:/etc/telegraf
+    restart: always
+    networks:
+      - telegraf-network
+    ports:
+      - "3003:3003"
+      - "9273:9273"
+
+networks:
+  telegraf-network:
+    driver: bridge
+
+
