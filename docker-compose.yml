@@ -35,7 +35,7 @@ services:
     environment:
       - GRAFANA_CLOUD_INSTANCE_ID = ${GRAFANA_CLOUD_INSTANCE_ID}
       - GRAFANA_CLOUD_API_KEY = ${GRAFANA_CLOUD_API_KEY}
-    command: ["run", "--server.http.listen-addr=0.0.0.0:12345", "--storage.path=/var/lib/alloy/data", "/etc/alloy/config.alloy"]
+    command: ["run", "--server.http.listen-addr=0.0.0.0:12345","--stability.level=experimental", "--storage.path=/var/lib/alloy/data", "/etc/alloy/config.alloy"]
     volumes:
       - ./alloy/config.alloy:/etc/alloy/config.alloy
       - /var/run/docker.sock:/var/run/docker.sock

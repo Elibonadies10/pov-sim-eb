@@ -68,6 +68,12 @@ otelcol.exporter.otlphttp "grafana_cloud" {
 	}
 }
 
+tracing {
+  sampling_fraction = 0.1
+
+  write_to = [otelcol.exporter.otlphttp.grafana_cloud.input]
+}
+
 otelcol.auth.basic "grafana_cloud" {
 
 	/*
@@ -79,28 +85,97 @@ otelcol.auth.basic "grafana_cloud" {
 	username = "453067"
 	password = "glc_eyJvIjoiNzA1MzkxIiwibiI6InN0YWNrLTQ1MzA2Ny1pbnRlZ3JhdGlvbi1wb3Ytc2ltIiwiayI6IjYwQzg2RTI5TWRVTjRNQ1FiMGx5ZTR3NiIsIm0iOnsiciI6InVzIn19"
 	
-}  
+}
+
+livedebugging {
+  enabled = true
+}
 
 
-prometheus.exporter.self "example" {}
+//prometheus.exporter.self "example" {}
 
 // Configure a prometheus.scrape component to collect Alloy metrics.
-prometheus.scrape "demo" {
+/*prometheus.scrape "demo" {
   targets    = prometheus.exporter.self.example.targets
   forward_to = [prometheus.remote_write.demo.receiver]
 }
+*/
 
 prometheus.scrape "influx" {
   // Collect metrics from the default listen address.
   targets = [{
-    __address__ = "127.0.0.1:9273",
+    __address__ = "host.docker.internal:9273",
   }]
 
-  forward_to = [prometheus.remote_write.demo.receiver]
+  forward_to = [prometheus.remote_write.metrics.receiver]
 }
 
+prometheus.exporter.self "integrations_alloy_health" { }
 
-prometheus.remote_write "demo" {
+discovery.relabel "integrations_alloy_health" {
+  targets = prometheus.exporter.self.integrations_alloy_health.targets
+
+  rule {
+    replacement = constants.hostname
+    target_label  = "instance"
+  }
+
+  rule {
+    target_label = "job"
+    replacement  = "integrations/alloy"
+  }
+}
+
+prometheus.scrape "integrations_alloy_health" {
+  targets    = discovery.relabel.integrations_alloy_health.output
+  forward_to = [prometheus.remote_write.metrics.receiver]
+  job_name   = "integrations/alloy"
+}
+
+logging {
+  write_to = [loki.process.logs_integrations_integrations_alloy_health.receiver]
+}
+
+loki.process "logs_integrations_integrations_alloy_health" {
+  forward_to = [loki.relabel.logs_integrations_integrations_alloy_health.receiver]
+
+  stage.regex {
+    expression = "(level=(?P<log_level>[\\s]*debug|warn|info|error))"
+  }
+  
+  stage.labels {
+    values = {
+      level = "log_level",
+    }
+  }
+}
+
+loki.relabel "logs_integrations_integrations_alloy_health" {
+
+  forward_to = [loki.write.grafana_cloud_loki.receiver]
+
+  rule {
+    replacement = constants.hostname
+    target_label  = "instance"
+  }
+
+  rule {
+    target_label = "job"
+    replacement  = "integrations/alloy"
+  }
+}
+
+loki.write "grafana_cloud_loki" {
+    endpoint {
+        url = "https://logs-prod3.grafana.net/loki/api/v1/push"
+        basic_auth {
+            username = "302422"
+            password = "glc_eyJvIjoiNzA1MzkxIiwibiI6InN0YWNrLTQ1MzA2Ny1obC13cml0ZS1lZWRkIiwiayI6IjAwYkhBbFkxN2h2UzYwWVM0OU5zMGI4TiIsIm0iOnsiciI6InVzIn19"
+        }
+    }
+}
+
+prometheus.remote_write "metrics" {
   endpoint {
     url = "https://prometheus-prod-10-prod-us-central-0.grafana.net/api/prom/push"
 
@@ -109,6 +184,18 @@ prometheus.remote_write "demo" {
       password = "glc_eyJvIjoiNzA1MzkxIiwibiI6InN0YWNrLTQ1MzA2Ny1obS13cml0ZS1zZWxmIiwiayI6Ik40MjBoblVNMk42dFo2ODdETjREWE4wQSIsIm0iOnsiciI6InVzIn19"
     }
   }
+}
+
+remotecfg {
+    url = "https://fleet-management-prod-001.grafana.net"
+    basic_auth {
+        username      = "453067"
+        password = "glc_eyJvIjoiNzA1MzkxIiwibiI6InN0YWNrLTQ1MzA2Ny1hbGxveS1mbGVldCIsImsiOiJpazZnSTcwN1NqbTY3bDQyc1JPNDJKUVgiLCJtIjp7InIiOiJ1cyJ9fQ=="
+    }
+
+    id             = constants.hostname
+    attributes     = {"cluster" = "dev", "namespace" = "otlp-dev"}
+    poll_frequency = "5m"
 }
 /*
 loki.process "luhn" {
